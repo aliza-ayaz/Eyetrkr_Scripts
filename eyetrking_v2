@@ -1,0 +1,280 @@
+A Note on File Formats:  
+
+The eye tracking data are saved in a file with the extension .trk, which contains a header, data, and end line 
+
+Triggers and their corresponding timepoints in milliseconds can be found throughout the .trk file. CTRL + F and search for “trigger” 
+
+Videos recorded with the MRC cameras are saved in the file format. vid (640x480). 
+
+These are humongous files that are difficult to work with – this is why we need to shrink their size by converting them to .mp4 files through zsh  
+
+Download VLC Media Player to view. vid and .mp4 files. QuickTime Player messes up the video duration and doesn’t work well  
+
+How to change the directory and run the zsh script: 
+
+Must add the script to your path in the terminal before using it: 
+
+Type vi .zshrc 
+
+Type export PATH=$PATH:/Users/yourusername/whereyoustorethescripts (e.g., export PATH=$PATH:/Users/shz4003/Desktop/ 
+
+Open terminal and navigate to the directory that contains the video files, which will look something like this: cd /Desktop/EyeTrackVideos 
+
+To run the zsh script we have created that converts the .vid file to .mp4 format and timestamps the mp4 file, type in the following on terminal: 
+
+ScriptName.sh VideoName 
+
+E.g if your script name is “eyetrking.sh”, and video name is “runs_001”, type the following into terminal after you have navigating to the directory containing the video file: 
+
+eyetrking.sh runs_001 
+
+ 
+
+Step 1: Converting .vid to .mp4, adding metadata (e.x. creation time) to .mp4, adding timestamps to the left corner of the mp4 (date, time of the day and stopwatch) 
+
+Download a text editor for scripting on zsh. Sublime is a great choice (it’s customizable, cross-platform, beautiful, and most importantly free!). But if you don’t like cool aesthetic free stuff, any text editor works  
+
+Zsh script (eyetrking.sh) with comments:  
+[#Comments are in red, code in green] 
+
+#!/usr/bin/env zsh  
+
+set –x 
+
+#Converts the .vid file to .mp4, reducing its size from GB to MB 
+
+#$1 refers to the first file in the working directory that we specify in the terminal (e.g., "eyetrking.sh runs_001") 
+
+ffmpeg -f rawvideo -framerate 250 -video_size 640x480 -pixel_format gray -r 250 -i $1.vid $1.mp4  
+
+#Removes the carriage return at the end of the line 
+
+sed "s/$(printf '\r')\$//" $1.trk > $1_modified.trk 
+
+ 
+
+#Grabs the line with the start time counter from .trk and saves it as creation_time 
+
+a=`grep 'start timecounter:' $1_modified.trk` 
+
+echo $a 
+
+#Inserts creation time into the metadata of the $1_fixed.mp4 
+
+ffmpeg -i $1.mp4 -movflags use_metadata_tags -metadata creation_time=$a $1_fixed.mp4 
+
+  
+
+#Puts all the metadata in the $1_fixed .mp4 into a text file 
+
+ffprobe $1_fixed.mp4 1>&$1.txt 
+
+#Removes the carriage return at the end of the line 
+
+sed "s/$(printf '\r')\$//" $1.txt > $1_modified.txt 
+
+ 
+
+Step 2: Trimming the mp4 file and timestamping it with the start time of the first trigger  
+
+#trig_1 is the time (in ms) of the first trigger, i.e the start time of interest 
+
+trig_1=`cat $1.trk | grep Trigger | awk -F'T' '{print $(1)}' | awk 'NR==1'`  
+
+echo $trig_1 
+
+#start is the start timestamp at the very beginning of the trk file, i.e when the eyetracker starts recording. This is not the time we’re interested in; we want the time when MRI scanning starts (first trigger)  
+
+start=`cat $1.trk | grep 'start timecounter' | awk -F'time' '{print $(NF-1) }'| awk -F':' '{print $NF}'` 
+
+echo $start 
+
+#trig_last is the time (in ms) of the last trigger 
+
+trig_last=`cat $1.trk | grep Trigger | awk -F'T' '{print $(1)}' | awk 'END{print}'|awk -F'.' '{print $1}'` 
+
+echo $trig_last 
+
+ 
+
+#tru_start is the time (in ms) between the start of eyetracker and first trigger. This is added onto the start timestamp at the very beginning of the file to give us the time when scanning starts 
+
+tru_start=`echo "$(($trig_1-$start))" |awk -F'.' '{print $(1)}'` 
+
+echo $tru_start 
+
+#Converts tru_start to seconds 
+
+tru_start_sec=`echo "$((tru_start/1000))"` 
+
+echo $tru_start_sec 
+
+#Converts the time in seconds to HH:MM:SS 
+
+start_stamp=`printf '%d:%d:%d\n' $(($tru_start_sec/3600)) $(($tru_start_sec%3600/60)) $(($tru_start_sec%60))` 
+
+echo $start_stamp 
+
+  
+
+#TR is repetition time, usually 1355 ms. Here we subtract first trigger time from last trigger time and divide by n-1 to get the average TR time specific to a run/file. TR can change slightly between runs which is why it’s important to get an average TR time for each file/run.  
+
+cat $1_modified.trk | grep Trigger | awk -F'T' '{print $1 }' > tr.txt #saves the times which have triggers  
+
+num_trigg=`wc -l tr.txt | awk '{print $(1)}'` #gets the length of the txt file which is the number of triggers  
+
+echo $num_trigg 
+
+trig_time=`echo "$(($trig_last-$trig_1))"` 
+
+echo $trig_time 
+
+TR_avg=`echo "$(($trig_time/($num_trigg-1)))"` 
+
+echo $TR_avg 
+
+  
+
+#end_time is the last trigger time + TR. TR is the difference in ms between two subsequent triggers 
+
+end_time=`echo "$(($trig_last+$TR_avg))" |awk -F'.' '{print $(1)}'` 
+
+echo $end_time 
+
+end_time_sec=`echo "$((end_time/1000))"` 
+
+echo $end_time_sec 
+
+duration_millisecs=`echo "$(($end_time-$trig_1))"` 
+
+echo $duration_millisecs  
+
+duration_secs=`echo "$(($duration_millisecs/1000))"` 
+
+echo $duration_secs 
+
+duration=`printf '%d:%d:%d\n' $(($duration_secs/3600)) $(($duration_secs%3600/60)) $(($duration_secs%60))`  
+
+echo $duration 
+
+ffmpeg -i $1_fixed.mp4 -ss ${start_stamp} -t ${duration} -c:a copy $1_trimmed.mp4 
+
+  
+
+#Grep date of the scan 
+
+date=`cat $1_modified.txt | grep creation | awk -F'T' '{print $ (NF-1) }' | awk -F'time:' '{print $NF}'` 
+
+echo $date 
+
+#Grep the starting time of the scan (It is in the format HH:MM:SS.ms) 
+
+time=`cat $1_modified.txt | grep creation | awk -F'T' '{print $NF }'| awk -F'.' '{print $ (NF-1) }'` 
+
+echo $time 
+
+#Converts the time (in the format HH:MM:SS.ms) into seconds, and sums to get total time in seconds 
+
+all_secs=`echo ${time} | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }'` 
+
+echo $all_secs 
+
+#Adds the time in seconds between start timecounter and the first trigger (i.e., tru_start_sec) to the time at the start of the scan in seconds (i.e., all_secs) -->  this gives the time in seconds when the trigger starts 
+
+trigger_start_secs=`echo "$(($all_secs+$tru_start_sec))"` 
+
+echo $trigger_start_secs 
+
+#convert it back to HH:mm:ss.ms 
+
+trigger_start=`printf '%d:%d:%d\n' $(($trigger_start_secs/3600)) $(($trigger_start_secs%3600/60)) $(($trigger_start_secs%60))` 
+
+echo $trigger_start 
+
+#b contains date and time. pts\:hms is a stopwatch/counter 
+
+b=`echo -e "${date} \n\n ${trigger_start} \n\n%{pts\:hms}"` 
+
+echo $b 
+
+  
+
+#draws $b onto the top left corner of the video 
+
+ffmpeg -i $1_trimmed.mp4 -filter_complex drawtext="fontfile=/usr/share/fonts/truetype/freefont/FreeSerif.ttf: text=\'${b}\' : 
+
+     x=25: y=25: fontsize=12: fontcolor=white@0.9: box=0: boxcolor=black@0.8" -c:a copy $1_final.mp4 
+
+  
+
+#add metadata (with modified creation time) to the final mp4 
+
+ffmpeg -i $1_final.mp4 -movflags use_metadata_tags -metadata creation_time="${date} ${trigger_start}" $1_final_fixed.mp4 
+
+ 
+
+Step 3: Trim the trk file so that it only contains the portion from the first trigger to the last trigger + TR time.  
+
+ 
+
+#Grep the line number of the first trigger in the original trk file  
+
+trigger1_linenumber=` grep -n Trigger $1.trk | awk 'NR==1' |awk -F':' '{print $1}' ` #grep –n means “give me the lines number of the lines containing the word” 
+
+echo $trigger1_linenumber 
+
+ 
+#Delete all of the lines before the line of the first trigger to get the partially trimmed trk file (i.e., $1_partially_trimmed.trk) 
+
+deleted_before_trigger1=`echo "$(($trigger1_linenumber-1))"` 
+
+echo $deleted_before_trigger1 
+
+echo `cat $1.trk | sed '1,'$deleted_before_trigger1' d' ` >$1_partially_trimmed.trk 
+
+ 
+#Awk the first column of the partially trimmed trk file which gives us only the timestamps  
+
+echo `cat $1.trk | sed '1,'$deleted_before_trigger1' d' | sed '$d' | awk '{print $1}'` >trk1.txt 
+
+ 
+#Make a while loop to name the timestamps that are greater than end_time (i.e. trig_last+TR_avg) as “Bad” 
+
+echo `while read i;do 
+
+    if [[ "$i" -lt "${end_time}" ]];then #lt means less than  
+
+        echo $i; 
+
+    else 
+
+        echo Bad 
+
+fi 
+
+done <trk1.txt`  >trk2.txt 
+
+ 
+#grep the line number of the first occurrence of the word “Bad” 
+
+trigger_last_TR_linenumber=` grep -n Bad trk2.txt | awk 'NR==1' |awk -F':' '{print $1}' ` 
+
+echo $trigger_last_TR_linenumber 
+
+ 
+ 
+
+#Delete all of the lines after the end_time to get the fully trimmed trk file  
+
+deleted_after=`echo "$(($trigger_last_TR_linenumber+1))"` 
+
+echo $deleted_after 
+
+echo `cat $1_partially_trimmed.trk | sed ' '$deleted_after', $d '` >$1_fully_trimmed.trk 
+
+ 
+ 
+
+ 
+
+ 
