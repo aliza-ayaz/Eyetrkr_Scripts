@@ -1,3 +1,4 @@
+%Simple script to get mean, max of time intervals for each eyetracking video
 fid = fopen('frame.csv');
 format longG;
 MeanArray=csvread('frame.csv',1,11, [1 11 69 11]);
