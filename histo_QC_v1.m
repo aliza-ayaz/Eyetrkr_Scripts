@@ -1,9 +1,10 @@
+%MATLAB script to QC your .trk files
 clear all
-direct = '/Users/alizaayaz/Desktop/dumbo';
+direct = '/Users/[yourpath]';
 direc = dir(direct);
 num_subdir = size(direc, 1);
 how_many_unique = zeros(84,1);
-j = 0; % counter - counts how many trk files you will work on
+j = 0; % counter - counts how many .trk files you will work on
 %tiledlayout(3, 5)
 for i = 4:5
   fs = dir([direct '/' direc(i).name]);
@@ -14,8 +15,6 @@ for i = 4:5
       j = j + 1;
       str=['cat ' curr_file ' | sed ''1,5d;$d'' | grep -v Trigger | awk ''{print $1}'' '] ;
       [jk, a]=system(str);
-      % does not work for the weird file for an unknown reason;
-      % str2num seems to work
       ave.b=diff(str2num(a));
       %nexttile
       scatter(1:numel(ave.b), ave.b, '.k')
@@ -30,7 +29,4 @@ for i = 4:5
     end
   end
 end
-% 
-% for i = 1:numel(imcurious.which_values)
-%   imcurious.which_values{i} % this type of indexing expands cell values as their type
-% end
+
