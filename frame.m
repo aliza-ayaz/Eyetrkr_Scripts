@@ -1,9 +1,6 @@
 %Checking for missing frames using a histogram approach. Check scatterplot approach below for better visual representation of individual outliers 
 function [ave] = frame(filename)
 
-%addpath '/Users/alizaayaz/Desktop/scrippies'
-%addpath '/Users/alizaayaz/Desktop/dumbo'
-%frame('runs_001.trk')
 str=['cat ' filename ' | sed ''1,5d;$d'' | grep -v Trigger | awk ''{print $1}'' '];
 [jk a]=system(str);
 ave.a=str2num(a);
