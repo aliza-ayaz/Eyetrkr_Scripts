@@ -1,3 +1,5 @@
+Scripts to QC eyetracking files obtained from MRC (MRI compatible eye tracking system)
+
 A Note on File Formats:  
 
 The eye tracking data are saved in a file with the extension .trk, which contains a header, data, and end line 
